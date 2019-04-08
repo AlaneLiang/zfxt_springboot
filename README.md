@@ -9,6 +9,7 @@
 4. redis
 5. 正则解析部分信息
 6. vue 前端页面
+7. Restful API
 
 #### 项目运行
 1. git 项目
