@@ -5,7 +5,7 @@
 #### 技术栈
 1. springboot 2.x
 2. jsoup 解析部分信息
-3. libsvm  
+3. libsvm 验证码识别
 4. redis
 5. 正则解析部分信息
 6. vue 前端页面
