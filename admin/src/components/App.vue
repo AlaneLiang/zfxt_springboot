@@ -119,7 +119,12 @@
               <Button :loading="loading" block color="primary" size="l" @click="submit">登录</Button>
             </div>
           </div>
-          <p class="copyright"> Copyright © 2019 校园助手 - <a href="">author lx</a></p>
+          <div class="copyright"> Copyright © 2019 校园助手 - <a href="">author lx</a>
+            <div style="margin-top: 5px">
+             <span  style="text-align: center;align-content: center;">Powered by  </span> <a href="https://www.upyun.com"> <img src="../images/youpai.png" style="width: 80px;height: 30px;align-content: center"></a>
+            </div>
+          </div>
+
         </div>
       </div>
       </div>

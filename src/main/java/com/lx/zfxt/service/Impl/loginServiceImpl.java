@@ -10,6 +10,9 @@ import com.lx.zfxt.log.HttpClientLog;
 import com.lx.zfxt.service.loginService;
 import com.lx.zfxt.utils.BizException;
 import com.lx.zfxt.utils.HtmlTools;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.NameValuePair;
@@ -27,10 +30,12 @@ import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 
+
+@Slf4j
 @Service
 public class loginServiceImpl implements loginService {
 
-    private  HttpClientLog log = new HttpClientLog();
+    private HttpClientLog httpClientLog = new HttpClientLog();
 
     /***
      * 获取页面的cookie 和 viewstate
@@ -40,7 +45,8 @@ public class loginServiceImpl implements loginService {
      * @throws IOException
      */
     @Override
-    public LoginData getViewAndCookie(HttpServletRequest request,String url) throws  IOException {
+    public LoginData getViewAndCookie(HttpServletRequest request, String url) throws IOException {
+
         LoginData loginData = new LoginData();
 
 
@@ -56,19 +62,18 @@ public class loginServiceImpl implements loginService {
         getMethod.addRequestHeader("DNT", "1");
         getMethod.addRequestHeader("Connection", "Keep-Alive");
         getMethod.addRequestHeader("Pragma", "no-cache");
-        log.printRequestHeadersLog(getMethod);
+
+        httpClientLog.printRequestHeadersLog(getMethod);
 
         httpClient.executeMethod(getMethod);
 
-        log.printResponseLog(getMethod);
+        //httpClientLog.printResponseLog(getMethod);
         String content;
-        BufferedReader bufr = new BufferedReader(new InputStreamReader(getMethod.getResponseBodyAsStream(),"utf-8"));
-        while((content=bufr.readLine())!=null)
-        {
-            if(content.contains("__VIEWSTATE"))
-            {
+        BufferedReader bufr = new BufferedReader(new InputStreamReader(getMethod.getResponseBodyAsStream(), "utf-8"));
+        while ((content = bufr.readLine()) != null) {
+            if (content.contains("__VIEWSTATE")) {
                 //value="dDwyODE2NTM0OTg7Oz7I2Cct+u86RN/NdUhLZSrpUl6ZsQ=="
-                String result = content.substring(content.indexOf("value=\"")+7,
+                String result = content.substring(content.indexOf("value=\"") + 7,
                         content.lastIndexOf("\""));
                 content = result;
                 loginData.setViewState(result);
@@ -77,10 +82,10 @@ public class loginServiceImpl implements loginService {
         }
 
         NET_SessionId = getMethod.getResponseHeader("Set-Cookie").getValue();
-        NET_SessionId = NET_SessionId.substring(NET_SessionId.indexOf("=")+1,NET_SessionId.indexOf(";"));
+        NET_SessionId = NET_SessionId.substring(NET_SessionId.indexOf("=") + 1, NET_SessionId.indexOf(";"));
 
         loginData.setCookie(NET_SessionId);
-        System.out.println("获取到请求参数为："+NET_SessionId);
+        System.out.println("获取到请求参数为：" + NET_SessionId);
 
         request.getSession().setAttribute("loginData", loginData);
 
@@ -108,134 +113,33 @@ public class loginServiceImpl implements loginService {
 
     /**
      * 登录后返回用户信息和课表
+     *
      * @param loginData
      * @param url
-     * @return  StuTimeTable
+     * @return StuTimeTable
      * @throws IOException
      */
     @Override
-    public StuTimeTable login(LoginData loginData,String url) throws IOException{
-       String returnLocal = null;
-        HttpClient httpClient = new HttpClient();
-        PostMethod post = new PostMethod(url);
-
-        NameValuePair[]  nvps = new NameValuePair[9];
-
-        nvps[0] = new NameValuePair("__VIEWSTATE",loginData.getViewState());
-        nvps[1] = new NameValuePair("Button1","");
-        nvps[2] = new NameValuePair("hidPdrs","");
-        nvps[3] = new NameValuePair("hidsc","");
-        nvps[4] = new NameValuePair("lbLanguage","");
-        nvps[5] = new NameValuePair("RadioButtonList1","学生");
-        nvps[6] = new NameValuePair("TextBox2",loginData.getTextBox2());
-        nvps[7] = new NameValuePair("txtSecretCode",loginData.getTxtSecretCode());
-        nvps[8] = new NameValuePair("txtUserName",loginData.getTxtUserName());
-
-        post.setRequestBody(nvps);
-        System.out.println("Cookie:"+loginData.getCookie());
-        post.addRequestHeader("Cookie", "ASP.NET_SessionId="+loginData.getCookie());
-
-      //  new HttpClientLog().printRequestHeadersLog(post);
-
-        httpClient.executeMethod(post);
-
-        // new HttpClientLog().printResponseHeadersLog(post);
-
-        BufferedReader bufr = new BufferedReader(new InputStreamReader(post.getResponseBodyAsStream()));
-        String line = null;
-        while((line=bufr.readLine())!=null)
-        {
-            if(line.contains("验证码不正确！"))
-            {
-                throw new BizException("对不起，您输入的验证码有误哦");
-
-            }
-        }
-        System.out.println(post.getResponseBodyAsString());
-        //    /xs_main.aspx?xh=13101010115
-        Header header = post.getResponseHeader("Location");
-        if(header==null)
-        {
-            throw new BizException("登录失败!!");
-
-        }
-        returnLocal=header.getValue();
-        if(!returnLocal.contains("xs_main.aspx"))
-        {
-            System.out.println("不正确的返回===》Location:  "+returnLocal);
-            String errorInfo = post.getResponseBodyAsString();
-            post.releaseConnection();
-            throw new BizException(errorInfo);
-        }
-        System.out.println("Location: "+returnLocal);
-        post.releaseConnection();
-
-
-        GetMethod get = new GetMethod(Constant.BASE_URL+returnLocal);
-        get.addRequestHeader("Cookie", "ASP.NET_SessionId="+loginData.getCookie());
-
-        //new HttpClientLog().printRequestHeadersLog(get);
-
-        httpClient.executeMethod(get);
-        String html = get.getResponseBodyAsString();
-        //jsoup 处理html标签
-        Document docMain = Jsoup.parse(html);
-        Elements nameHtml = docMain.select("span#xhxm");
-        String  name = nameHtml.text().replace("同学","");
-
-        loginData.setName(name);
-
-        PostMethod postMethod3 = new PostMethod(Constant.BASE_URL+"/xskbcx.aspx" +"?xh="+loginData.getTxtUserName()+"&xm="+URLEncoder.encode(loginData.getName(),"gb2312")+"&gnmkdm=N121603");
-
-
-        //每次访问需授权的网址时带上前面的cookie作为通行证
-        postMethod3.setRequestHeader("Cookie", "ASP.NET_SessionId="+loginData.getCookie());
-        postMethod3.setRequestHeader("Referer",Constant.BASE_URL+"/xs_main.aspx"+"?xh="+loginData.getTxtUserName());
-
-        httpClient.executeMethod(postMethod3);
-
-       // new HttpClientLog().printResponseLog(postMethod3);
-
-        String html_schedule = postMethod3.getResponseBodyAsString();
-        StuSimpleInfo stuSimpleInfo = HtmlTools.getCourseStuInfo(html_schedule);
-        ArrayList<Course> courses = HtmlTools.getCourseList(html_schedule);
-
-        StuTimeTable stuTimeTable = new StuTimeTable();
-        stuTimeTable.setInfo(stuSimpleInfo);
-        stuTimeTable.setCourseArrayList(courses);
-
-        return stuTimeTable;
-    }
-
-    /***
-     * 用户登录状态刷新（session过期后调用）
-     * @param loginData
-     * @param url
-     * @return  String name
-     * @throws IOException
-     */
-    @Override
-    public String refresh(LoginData loginData, String url) throws IOException {
-
+    public StuTimeTable login(LoginData loginData, String url) throws IOException {
         String returnLocal = null;
         HttpClient httpClient = new HttpClient();
         PostMethod post = new PostMethod(url);
 
-        NameValuePair[]  nvps = new NameValuePair[9];
+        NameValuePair[] nvps = new NameValuePair[9];
 
-        nvps[0] = new NameValuePair("__VIEWSTATE",loginData.getViewState());
-        nvps[1] = new NameValuePair("Button1","");
-        nvps[2] = new NameValuePair("hidPdrs","");
-        nvps[3] = new NameValuePair("hidsc","");
-        nvps[4] = new NameValuePair("lbLanguage","");
-        nvps[5] = new NameValuePair("RadioButtonList1","学生");
-        nvps[6] = new NameValuePair("TextBox2",loginData.getTextBox2());
-        nvps[7] = new NameValuePair("txtSecretCode",loginData.getTxtSecretCode());
-        nvps[8] = new NameValuePair("txtUserName",loginData.getTxtUserName());
+        nvps[0] = new NameValuePair("__VIEWSTATE", loginData.getViewState());
+        nvps[1] = new NameValuePair("Button1", "");
+        nvps[2] = new NameValuePair("hidPdrs", "");
+        nvps[3] = new NameValuePair("hidsc", "");
+        nvps[4] = new NameValuePair("lbLanguage", "");
+        nvps[5] = new NameValuePair("RadioButtonList1", "学生");
+        nvps[6] = new NameValuePair("TextBox2", loginData.getTextBox2());
+        nvps[7] = new NameValuePair("txtSecretCode", loginData.getTxtSecretCode());
+        nvps[8] = new NameValuePair("txtUserName", loginData.getTxtUserName());
 
         post.setRequestBody(nvps);
-        System.out.println("Cookie:"+loginData.getCookie());
-        post.addRequestHeader("Cookie", "ASP.NET_SessionId="+loginData.getCookie());
+        System.out.println("Cookie:" + loginData.getCookie());
+        post.addRequestHeader("Cookie", "ASP.NET_SessionId=" + loginData.getCookie());
 
         //  new HttpClientLog().printRequestHeadersLog(post);
 
@@ -245,10 +149,8 @@ public class loginServiceImpl implements loginService {
 
         BufferedReader bufr = new BufferedReader(new InputStreamReader(post.getResponseBodyAsStream()));
         String line = null;
-        while((line=bufr.readLine())!=null)
-        {
-            if(line.contains("验证码不正确！"))
-            {
+        while ((line = bufr.readLine()) != null) {
+            if (line.contains("验证码不正确！")) {
                 throw new BizException("对不起，您输入的验证码有误哦");
 
             }
@@ -256,25 +158,23 @@ public class loginServiceImpl implements loginService {
         System.out.println(post.getResponseBodyAsString());
         //    /xs_main.aspx?xh=13101010115
         Header header = post.getResponseHeader("Location");
-        if(header==null)
-        {
+        if (header == null) {
             throw new BizException("登录失败!!");
 
         }
-        returnLocal=header.getValue();
-        if(!returnLocal.contains("xs_main.aspx"))
-        {
-            System.out.println("不正确的返回===》Location:  "+returnLocal);
+        returnLocal = header.getValue();
+        if (!returnLocal.contains("xs_main.aspx")) {
+            System.out.println("不正确的返回===》Location:  " + returnLocal);
             String errorInfo = post.getResponseBodyAsString();
             post.releaseConnection();
             throw new BizException(errorInfo);
         }
-        System.out.println("Location: "+returnLocal);
+        System.out.println("Location: " + returnLocal);
         post.releaseConnection();
 
 
-        GetMethod get = new GetMethod(Constant.BASE_URL+returnLocal);
-        get.addRequestHeader("Cookie", "ASP.NET_SessionId="+loginData.getCookie());
+        GetMethod get = new GetMethod(Constant.BASE_URL + returnLocal);
+        get.addRequestHeader("Cookie", "ASP.NET_SessionId=" + loginData.getCookie());
 
         //new HttpClientLog().printRequestHeadersLog(get);
 
@@ -283,7 +183,105 @@ public class loginServiceImpl implements loginService {
         //jsoup 处理html标签
         Document docMain = Jsoup.parse(html);
         Elements nameHtml = docMain.select("span#xhxm");
-        String  name = nameHtml.text().replace("同学","");
+        String name = nameHtml.text().replace("同学", "");
+
+        loginData.setName(name);
+
+        PostMethod postMethod3 = new PostMethod(Constant.BASE_URL + "/xskbcx.aspx" + "?xh=" + loginData.getTxtUserName() + "&xm=" + URLEncoder.encode(loginData.getName(), "gb2312") + "&gnmkdm=N121603");
+
+
+        //每次访问需授权的网址时带上前面的cookie作为通行证
+        postMethod3.setRequestHeader("Cookie", "ASP.NET_SessionId=" + loginData.getCookie());
+        postMethod3.setRequestHeader("Referer", Constant.BASE_URL + "/xs_main.aspx" + "?xh=" + loginData.getTxtUserName());
+
+        httpClient.executeMethod(postMethod3);
+
+        // new HttpClientLog().printResponseLog(postMethod3);
+
+        String html_schedule = postMethod3.getResponseBodyAsString();
+        StuSimpleInfo stuSimpleInfo = HtmlTools.getCourseStuInfo(html_schedule);
+        ArrayList<Course> courses = HtmlTools.getCourseList(html_schedule);
+
+        StuTimeTable stuTimeTable = new StuTimeTable();
+        stuTimeTable.setInfo(stuSimpleInfo);
+        stuTimeTable.setCourseArrayList(courses);
+        log.info("用户姓名：{},正方系统账号：{},正方系统密码：{}",name,loginData.getTxtUserName(),loginData.getTextBox2());
+        return stuTimeTable;
+    }
+
+    /***
+     * 用户登录状态刷新（session过期后调用）
+     * @param loginData
+     * @param url
+     * @return String name
+     * @throws IOException
+     */
+    @Override
+    public String refresh(LoginData loginData, String url) throws IOException {
+
+        String returnLocal = null;
+        HttpClient httpClient = new HttpClient();
+        PostMethod post = new PostMethod(url);
+
+        NameValuePair[] nvps = new NameValuePair[9];
+
+        nvps[0] = new NameValuePair("__VIEWSTATE", loginData.getViewState());
+        nvps[1] = new NameValuePair("Button1", "");
+        nvps[2] = new NameValuePair("hidPdrs", "");
+        nvps[3] = new NameValuePair("hidsc", "");
+        nvps[4] = new NameValuePair("lbLanguage", "");
+        nvps[5] = new NameValuePair("RadioButtonList1", "学生");
+        nvps[6] = new NameValuePair("TextBox2", loginData.getTextBox2());
+        nvps[7] = new NameValuePair("txtSecretCode", loginData.getTxtSecretCode());
+        nvps[8] = new NameValuePair("txtUserName", loginData.getTxtUserName());
+
+        post.setRequestBody(nvps);
+        System.out.println("Cookie:" + loginData.getCookie());
+        post.addRequestHeader("Cookie", "ASP.NET_SessionId=" + loginData.getCookie());
+
+        //  new HttpClientLog().printRequestHeadersLog(post);
+
+        httpClient.executeMethod(post);
+
+        // new HttpClientLog().printResponseHeadersLog(post);
+
+        BufferedReader bufr = new BufferedReader(new InputStreamReader(post.getResponseBodyAsStream()));
+        String line = null;
+        while ((line = bufr.readLine()) != null) {
+            if (line.contains("验证码不正确！")) {
+                throw new BizException("对不起，您输入的验证码有误哦");
+
+            }
+        }
+        System.out.println(post.getResponseBodyAsString());
+        //    /xs_main.aspx?xh=13101010115
+        Header header = post.getResponseHeader("Location");
+        if (header == null) {
+            throw new BizException("登录失败!!");
+
+        }
+        returnLocal = header.getValue();
+        if (!returnLocal.contains("xs_main.aspx")) {
+            System.out.println("不正确的返回===》Location:  " + returnLocal);
+            String errorInfo = post.getResponseBodyAsString();
+            post.releaseConnection();
+            throw new BizException(errorInfo);
+        }
+        System.out.println("Location: " + returnLocal);
+        post.releaseConnection();
+
+
+        GetMethod get = new GetMethod(Constant.BASE_URL + returnLocal);
+        get.addRequestHeader("Cookie", "ASP.NET_SessionId=" + loginData.getCookie());
+
+        //new HttpClientLog().printRequestHeadersLog(get);
+
+        httpClient.executeMethod(get);
+        String html = get.getResponseBodyAsString();
+        //jsoup 处理html标签
+        Document docMain = Jsoup.parse(html);
+        Elements nameHtml = docMain.select("span#xhxm");
+        String name = nameHtml.text().replace("同学", "");
 
         loginData.setName(name);
 
